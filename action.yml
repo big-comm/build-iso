@@ -101,14 +101,11 @@ outputs:
 runs:
   using: "composite"
   steps:
-    - name: Define send_telegram_message function in temporary script
+    - name: Define terminal utility functions
       shell: bash
-      env:
-        TELEGRAM_TOKEN: "${{ inputs.telegram_token }}"
-        TELEGRAM_CHAT_ID: "${{ inputs.telegram_chat_id }}"
       run: |
-        # Define send_telegram_message function in temporary script
-        cat << 'EOF' > /tmp/send_telegram_message.sh
+        # Define terminal utility functions in temporary script
+        cat << 'EOF' > /tmp/terminal_utils.sh
         export TERM=${TERM:-xterm}
         export TERM=${TERM:-xterm-256color}
 
@@ -138,9 +135,6 @@ runs:
 
         msg_raw() {
           local msg="$1"
-          # Remove HTML tags if they exist
-          #msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
-
           # Check if message contains ':'
           if [[ "$msg" == *:* ]]; then
             # Split string before and after first ':'
@@ -201,19 +195,16 @@ runs:
 
         send_telegram_message() {
           local message="$1"
-          local parse_mode="$2"
-
-          # Set parse_mode as "HTML" if not specified
-          [[ -z $parse_mode ]] && parse_mode="HTML"
-
-          # Remove HTML tags and display result in terminal
-          echo -e "${green}$(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          local parse_mode="${2:-HTML}"
           
-          # Send original message with HTML to Telegram
+          # Display message in terminal (without HTML tags)
+          echo -e "${red}ERROR: $(sed 's/<[^>]*>//g' <<< "$message")${reset}"
+          
+          # Send to Telegram
           curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
             -d chat_id="${{ inputs.telegram_chat_id }}" \
-            -d text="$message" \
-            -d parse_mode="$parse_mode"
+            -d text="${message}" \
+            -d parse_mode="${parse_mode}"
         }
         export -f send_telegram_message
         EOF
@@ -221,7 +212,7 @@ runs:
     - name: Display system information
       shell: bash
       run: |
-        source /tmp/send_telegram_message.sh
+        source /tmp/terminal_utils.sh
         replicate '='
         msg_info "Current host: $(hostname)"
         msg_info "Current user: $(whoami) [$(id -u)]"
@@ -235,7 +226,7 @@ runs:
     - name: Setup build environment
       shell: bash
       run: |
-        source /tmp/send_telegram_message.sh
+        source /tmp/terminal_utils.sh
         
         # Setup build environment
         msg "Setting up build packages"
@@ -250,35 +241,6 @@ runs:
             echo
           } | sudo tee -a /etc/pacman.conf > /dev/null
         fi
-
-        # Install required packages
-        msg_info "Installing required packages"
-        sudo pacman -Sy --quiet --needed --noconfirm --overwrite \* \
-          manjaro-chrootbuild \
-          manjaro-tools-iso-git \
-          manjaro-tools-yaml-git \
-          manjaro-tools-base-git \
-          mktorrent \
-          squashfs-tools \
-          archiso \
-          calamares \
-          calamares-tools \
-          mkinitcpio \
-          shfmt \
-          cdrkit \
-          ncurses > /dev/null
-          
-        # # Configure disable-fsync for faster builds
-        # msg "Configuring disable-fsync"
-        # DISABLE_FSYNC_URL="https://raw.githubusercontent.com/biglinux/disable-fsync/main/disable-fsync/usr/lib/disable-fsync.so"
-        # DISABLE_FSYNC_FILE="/usr/lib/disable-fsync.so"
-        # PRELOAD_FILE="/etc/ld.so.preload"
-        
-        # sudo wget "$DISABLE_FSYNC_URL" -O "$DISABLE_FSYNC_FILE"
-        # SHA256SUM=$(curl -s "$DISABLE_FSYNC_URL" | sha256sum | awk '{print $1}')
-        # echo "${SHA256SUM} ${DISABLE_FSYNC_FILE}" | sha256sum --check || exit 1
-        # sudo sh -c "echo '${DISABLE_FSYNC_FILE}' >> '${PRELOAD_FILE}'"
-        # sudo ldconfig
         
         # Setup cryptographic keys
         msg "Setting up cryptographic keys"
@@ -310,17 +272,10 @@ runs:
         sudo chmod 660 /dev/sr0 || true
         sudo chown root:root /dev/sr0 || true
 
-    - name: Setup tmate session for debugging
-      uses: mxschmitt/action-tmate@v3
-      if: ${{ github.event.client_payload.tmate == true || inputs.tmate == true}}
-      with:
-        install-dependencies: false
-        detached: true
-
     - name: Set environment variables
       shell: bash
       run: |
-        source /tmp/send_telegram_message.sh
+        source /tmp/terminal_utils.sh
         msg "Setting environment variables"
         
         # Determine distroname for ISO profiles
@@ -356,7 +311,7 @@ runs:
       id: build
       shell: bash
       run: |
-        source /tmp/send_telegram_message.sh
+        source /tmp/terminal_utils.sh
         msg "Starting ISO build process"
         
         # Execute the existing build-iso.sh script directly
@@ -364,8 +319,20 @@ runs:
         ./build-iso.sh --automatic
         
         # Check exit code
-        if [ $? -ne 0 ]; then
-          die "ISO build failed"
+        BUILD_EXIT_CODE=$?
+        if [ $BUILD_EXIT_CODE -ne 0 ]; then
+          # Send failure notification
+          link_action="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          
+          FAILURE_MESSAGE="🚨 <b>ISO BUILD FAILED:</b>
+          <b>Job:</b> <code>#${GITHUB_RUN_NUMBER}</code>
+          <b>Distribution:</b> <code>${DISTRONAME}</code>
+          <b>Edition:</b> <code>${EDITION}</code>
+          <b>Error URL:</b> <a href='${link_action}'>${link_action}</a>
+          <b>Exit Code:</b> <code>${BUILD_EXIT_CODE}</code>"
+          
+          send_telegram_message "$FAILURE_MESSAGE" "HTML"
+          die "ISO build failed with exit code ${BUILD_EXIT_CODE}"
         fi
         
         msg_ok "ISO build completed successfully"
@@ -380,7 +347,7 @@ runs:
     - name: Set ISO path for output
       shell: bash
       run: |
-        source /tmp/send_telegram_message.sh
+        source /tmp/terminal_utils.sh
         msg "Setting ISO path for output"
         echo "ISO_PATH=$WORK_PATH/$ISO_BASENAME" >> $GITHUB_ENV
         msg_ok "ISO path set to: $WORK_PATH/$ISO_BASENAME"
