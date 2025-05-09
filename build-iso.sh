@@ -9,7 +9,7 @@
 
 # Script information
 APP="${0##*/}"
-VERSION="1.0.0"
+VERSION="1.0.1"
 DESCRIPTION="ISO Builder Tool for BigCommunity/BigLinux"
 
 # Terminal configuration
@@ -257,6 +257,10 @@ setup_manjaro_tools() {
   find "$WORK_PATH_ISO_PROFILES" -name "kernels.cfg" -exec sudo sed -i "s/misobasedir=[^ ]*/misobasedir=${DISTRONAME,,}/g" {} + || true
   find "$WORK_PATH_ISO_PROFILES" -name "kernels.cfg" -exec sudo sed -i "s/misolabel=[^ ]*/misolabel=${VOL_ID}/g" {} + || true
   
+  # Adjust configuration in grub-fix.sh files
+   msg_info "Adjusting grub-fix.sh files"
+   find "$WORK_PATH_ISO_PROFILES" -name "grub-fix.sh" -exec sudo sed -i "s|misobasedir=[^ ]* misolabel=[^ ]*|misobasedir=${DISTRONAME,,} misolabel=${VOL_ID}|g" {} + || true
+
   # Update theme paths
   msg_info "Adjusting theme paths"
   find "$WORK_PATH_ISO_PROFILES" -name "variable.cfg" -exec sudo sed -i \
@@ -357,6 +361,31 @@ mkiso_build_iso_cleanups() {
   fi
 }
 EOF_CLEANUPS
+}
+
+# Patch manjaro-tools to respect the community-release package
+patch_manjaro_tools() {
+  msg "Patching manjaro-tools to respect community-release package"
+  
+  local script="/usr/lib/manjaro-tools/util-iso-image.sh"
+  
+  # Replace the lsb-release configuration function
+  sudo sed -i '/msg2 "Configuring lsb-release"/,+2c\
+        msg2 "Configuring lsb-release: respecting community-release package"\
+        # If community-release is installed, preserve its values\
+        if grep -q "community-release" "$1/var/lib/pacman/local/"*"/files" 2>/dev/null; then\
+            msg2 "community-release package detected, preserving its values"\
+        else\
+            sed -i -e "s/^.*DISTRIB_RELEASE.*/DISTRIB_RELEASE=\\"${dist_release}\\"/" "$1/etc/lsb-release"\
+            sed -i -e "s/^.*DISTRIB_CODENAME.*/DISTRIB_CODENAME=\\"${dist_codename}\\"/" "$1/etc/lsb-release"\
+        fi' "$script"
+  
+  # Verify the patch was applied
+  if grep -q "respecting community-release package" "$script"; then
+    msg_ok "Successfully patched manjaro-tools to respect community-release"
+  else
+    msg_warning "Failed to patch manjaro-tools. ISO build may override lsb-release values"
+  fi
 }
 
 # Configure kernel for ISO
@@ -658,6 +687,7 @@ make_iso() {
   
   # Configure build
   setup_manjaro_tools
+  patch_manjaro_tools
   configure_kernel
   
   # Add repositories to ISO
