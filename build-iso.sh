@@ -118,18 +118,7 @@ add_repositories_to_pacman() {
   
   msg_info "Adding repositories to: $config_file"
   
-  # Configure BigLinux repositories
-  case "$BIGLINUX_BRANCH" in
-    stable)
-      add_biglinux_stable | sudo tee -a "$config_file" >/dev/null
-      ;;
-    testing)
-      add_biglinux_testing | sudo tee -a "$config_file" >/dev/null
-      add_biglinux_stable | sudo tee -a "$config_file" >/dev/null
-      ;;
-  esac
-  
-  # Configure BigCommunity repositories if applicable
+  # Configure BigCommunity repositories first (higher priority)
   if [[ "$DISTRONAME" == "bigcommunity" ]]; then
     case "$BIGCOMMUNITY_BRANCH" in
       stable)
@@ -146,7 +135,18 @@ add_repositories_to_pacman() {
     esac
   fi
   
-  # Add Manjaro mirrors
+  # Configure BigLinux repositories after (lower priority)
+  case "$BIGLINUX_BRANCH" in
+    stable)
+      add_biglinux_stable | sudo tee -a "$config_file" >/dev/null
+      ;;
+    testing)
+      add_biglinux_testing | sudo tee -a "$config_file" >/dev/null
+      add_biglinux_stable | sudo tee -a "$config_file" >/dev/null
+      ;;
+  esac
+  
+  # Add Manjaro mirrors last
   add_manjaro_mirrors "$config_file"
 }
 
