@@ -8,81 +8,6 @@ on:
   repository_dispatch:
     types:
       - "ISO-*"
-  workflow_dispatch:
-    inputs:
-      distroname:
-        type: choice
-        description: "Distribution name for the ISO"
-        required: true
-        options:
-          - bigcommunity
-          - biglinux
-          - manjaro
-        default: "bigcommunity"
-      iso_profiles_repo:
-        type: choice
-        description: "ISO profiles repository"
-        required: true
-        options:
-          - "https://github.com/big-comm/iso-profiles"
-          - "https://github.com/biglinux/iso-profiles"
-        default: "https://github.com/big-comm/iso-profiles"
-      scope:
-        type: choice
-        description: "Build scope"
-        options:
-          - full
-          - minimal
-        default: "full"
-      tmate:
-        type: boolean
-        description: "Enable debugging with tmate"
-        required: false
-        default: false
-      kernel:
-        type: choice
-        description: "Kernel version"
-        options:
-          - latest
-          - lts
-          - oldLts
-          - xanmod
-        default: lts
-      manjaro_branch:
-        type: choice
-        description: "Manjaro branch"
-        options:
-          - stable
-          - testing
-          - unstable
-        default: stable
-      community_branch:
-        type: choice
-        description: "Community branch"
-        options:
-          - stable
-          - testing
-        default: testing
-      biglinux_branch:
-        type: choice
-        description: "BigLinux branch"
-        options:
-          - stable
-          - testing
-        default: testing
-      edition:
-        type: choice
-        description: "Edition"
-        options:
-          - cinnamon
-          - cosmic
-          - deepin
-          - gnome
-          - hyprland
-          - kde
-          - xfce
-          - wmaker
-        default: xfce
 
 env:
   TELEGRAM_TOKEN: "${{ secrets.TOKEN_BOT }}"
@@ -90,12 +15,12 @@ env:
   CHAT_ID: "${{ secrets.CHAT_ID }}"
   started_by_user: "${{ github.actor }}"
   triggered_by_user: "${{ github.triggering_actor }}"
-  iso_distroname: "${{ github.event.client_payload.distroname || inputs.distroname || 'bigcommunity' }}"
-  iso_manjaro_branch: "${{ github.event.client_payload.manjaro_branch || inputs.manjaro_branch}}"
-  iso_biglinux_branch: "${{ github.event.client_payload.biglinux_branch || inputs.biglinux_branch}}"
-  iso_bigcommunity_branch: "${{ github.event.client_payload.community_branch || inputs.community_branch}}"
-  iso_edition: "${{ github.event.client_payload.edition || inputs.edition}}"
-  iso_kernel: "${{ github.event.client_payload.kernel || inputs.kernel }}"
+  iso_distroname: "${{ github.event.client_payload.distroname }}"
+  iso_manjaro_branch: "${{ github.event.client_payload.manjaro_branch }}"
+  iso_biglinux_branch: "${{ github.event.client_payload.biglinux_branch }}"
+  iso_bigcommunity_branch: "${{ github.event.client_payload.community_branch }}"
+  iso_edition: "${{ github.event.client_payload.edition }}"
+  iso_kernel: "${{ github.event.client_payload.kernel }}"
 
 jobs:
   setup:
@@ -116,11 +41,10 @@ jobs:
       - name: Set branch information
         shell: bash
         run: |
-          # Determine ISO branch based on distribution type
+          # Set ISO branch based on distribution type
           case "${iso_distroname}" in
             bigcommunity) iso_branch="${iso_bigcommunity_branch}";;
             biglinux) iso_branch="${iso_biglinux_branch}";;
-            manjaro) iso_branch="${iso_manjaro_branch}";;
           esac
           echo "ISO_BRANCH='$iso_branch'" >> $GITHUB_ENV
           echo "ISO_BRANCH='$iso_branch'" >> shared_file.txt
@@ -137,7 +61,7 @@ jobs:
           <b>Started by:</b> <code>${started_by_user}/${triggered_by_user}</code>
           <b>Start time:</b> <code>${START_TIME}</code>
           <b>Distribution:</b> <code>${iso_distroname}</code>
-          <b>ISO Profile:</b> <code>${{ github.event.client_payload.iso_profiles_repo || inputs.iso_profiles_repo }}</code>
+          <b>ISO Profile:</b> <code>${{ github.event.client_payload.iso_profiles_repo }}</code>
           <b>Edition:</b> <code>${iso_edition}</code>
           <b>Manjaro Branch:</b> <code>${iso_manjaro_branch}</code>
           <b>BigLinux Branch:</b> <code>${iso_biglinux_branch}</code>
@@ -157,7 +81,7 @@ jobs:
           path: shared_file.txt
 
   build:
-    name: Build ISO ${{ github.event.client_payload.distroname || inputs.distroname }} ${{ github.event.client_payload.edition || inputs.edition }}
+    name: Build ISO ${{ github.event.client_payload.distroname }} ${{ github.event.client_payload.edition }}
     runs-on: ubuntu-latest
     needs: [setup]
     container:
@@ -228,30 +152,24 @@ jobs:
         id: build
         with:
           # Basic ISO parameters
-          distroname: ${{ github.event.client_payload.distroname || inputs.distroname || 'bigcommunity' }}
-          edition: ${{ github.event.client_payload.edition || inputs.edition}}
+          distroname: ${{ github.event.client_payload.distroname }}
+          edition: ${{ github.event.client_payload.edition }}
           release_tag: ${{ env.RELEASE_TAG }}
-          kernel: ${{ github.event.client_payload.kernel || inputs.kernel }}
-          scope: ${{ github.event.client_payload.scope || inputs.scope }}
-          office-chooser: ${{ github.event.client_payload.office-chooser || inputs.office-chooser }}
+          kernel: ${{ github.event.client_payload.kernel }}
 
           # Branch parameters
-          manjaro_branch: ${{ github.event.client_payload.manjaro_branch || inputs.manjaro_branch }}
-          community_branch: ${{ github.event.client_payload.community_branch || inputs.community_branch }}
-          biglinux_branch: ${{ github.event.client_payload.biglinux_branch || inputs.biglinux_branch }}
+          manjaro_branch: ${{ github.event.client_payload.manjaro_branch }}
+          community_branch: ${{ github.event.client_payload.community_branch }}
+          biglinux_branch: ${{ github.event.client_payload.biglinux_branch }}
 
           # Debug options
-          tmate: ${{ github.event.client_payload.tmate || inputs.tmate }}
+          tmate: ${{ github.event.client_payload.tmate }}
 
           # Auth tokens
           github_token: ${{ secrets.TOKEN_RELEASE }}
-          telegram_token: ${{ secrets.TOKEN_BOT }}
-          telegram_chat_id: ${{ secrets.CHAT_ID }}
 
           # Additional parameters
-          iso_profiles_repo: ${{ github.event.client_payload.iso_profiles_repo || inputs.iso_profiles_repo }}
-          start_time: "${{ env.START_TIME }}"
-          start_timestamp: "${{ env.START_TIMESTAMP }}"
+          iso_profiles_repo: ${{ github.event.client_payload.iso_profiles_repo }}
 
       - name: Set ISO path
         shell: bash

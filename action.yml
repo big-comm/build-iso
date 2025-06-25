@@ -7,87 +7,46 @@ description: "Builds a Custom ISO image for BigCommunity/BigLinux"
 
 inputs:
   distroname:
-    type: choice
-    description: "Distribution name for the ISO"
+    description: "Distribution name"
     required: true
-    options:
-      - bigcommunity
-      - biglinux
-    default: "bigcommunity"
   
   iso_profiles_repo:
-    type: choice
-    description: "ISO profiles repository"
+    description: "ISO profiles repository URL"
     required: true
-    options:
-      - "https://github.com/big-comm/iso-profiles"
-      - "https://github.com/biglinux/iso-profiles"
-      - "https://github.com/talesam/iso-profiles"
-    default: "https://github.com/big-comm/iso-profiles"
-  
-  iso_profiles_branch:
-    description: "Branch of the ISO profiles repository (optional)"
-    required: false
   
   edition:
-    description: "Name of the ISO profile to build"
+    description: "ISO profile edition"
     required: true
   
   community_branch:
-    description: "Community branch (stable, testing)"
+    description: "Community branch"
     required: false
   
   biglinux_branch:
-    description: "BigLinux branch (stable, testing)"
+    description: "BigLinux branch"
     required: true
   
   manjaro_branch:
-    description: "Manjaro branch (stable, testing, unstable)"
+    description: "Manjaro branch"
     required: false
     default: "stable"
   
-  scope:
-    description: "Build scope (full or minimal)"
-    required: false
-    default: "full"
-  
   kernel:
-    description: "Kernel version (latest, lts, oldLts, xanmod)"
+    description: "Kernel version"
     required: true
   
   release_tag:
-    description: "Release tag for the ISO"
+    description: "Release tag"
     required: true
   
   tmate:
-    description: "Enable debugging with tmate"
+    description: "Enable tmate debugging"
     required: false
     default: false
   
-  office-chooser:
-    description: "Include office suite"
-    required: false
-    default: "false"
-  
-  telegram_token:
-    description: "Token for Telegram notifications"
-    required: false
-  
-  telegram_chat_id:
-    description: "Chat ID for Telegram notifications"
-    required: false
-  
   github_token:
-    description: "GitHub token for authentication"
+    description: "GitHub token"
     required: true
-  
-  start_time:
-    description: "Workflow start time"
-    required: false
-  
-  start_timestamp:
-    description: "Workflow start timestamp"
-    required: false
 
 outputs:
   iso_path:
@@ -104,86 +63,48 @@ runs:
     - name: Define terminal utility functions
       shell: bash
       run: |
-        # Define terminal utility functions in temporary script
         cat << 'EOF' > /tmp/terminal_utils.sh
-        export TERM=${TERM:-xterm}
         export TERM=${TERM:-xterm-256color}
 
-        # Color definitions for status messages
-        blueDark="\e[1;38;5;33m"     # Bold dark blue
-        mediumBlue="\e[1;38;5;32m"   # Bold medium blue
-        lightBlue="\e[1;38;5;39m"    # Bold light blue
-        cyan="\e[1;38;5;45m"         # Bold cyan
-        white="\e[1;97m"             # Bold white
-        reset="\e[0m"                # Reset text formatting
-
-        # Additional colors for warnings/errors
-        red="\e[1;31m"               # Bold red for errors
-        yellow="\e[1;33m"            # Bold yellow for warnings
-        green="\e[1;32m"             # Bold green for success
-        
-        alias ls='ls -lha --color=auto'
-        alias dir='ls -lha --color=auto'
+        # Color definitions
+        blueDark="\e[1;38;5;33m"
+        lightBlue="\e[1;38;5;39m"
+        cyan="\e[1;38;5;45m"
+        white="\e[1;97m"
+        reset="\e[0m"
+        red="\e[1;31m"
+        green="\e[1;32m"
 
         die() {
-          local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          local msg="$(sed 's/<[^>]*>//g' <<< "$1")"
           echo -e "BP=>${red}error: ${white}${msg}${reset}"
           exit 1
         }
         export -f die
 
-        msg_raw() {
-          local msg="$1"
-          # Check if message contains ':'
-          if [[ "$msg" == *:* ]]; then
-            # Split string before and after first ':'
-            local before_colon="${msg%%:*}:"
-            local after_colon="${msg#*: }"
-            # Apply colors
-            msg="${mediumBlue}${before_colon} ${white}${after_colon}${reset}"
-          else
-            # If no ':', apply default color
-            msg="${mediumBlue}${msg}${reset}"
-          fi
-          echo -e "$msg"
-        }
-        export -f msg_raw
-
         msg() {
-          local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          local msg="$(sed 's/<[^>]*>//g' <<< "$1")"
           echo -e "BP=>${blueDark}[${lightBlue}RUNNING${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
         }
         export -f msg
 
         msg_ok() {
-          local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          local msg="$(sed 's/<[^>]*>//g' <<< "$1")"
           echo -e "BP=>${blueDark}[${green}SUCCESS${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
         }
         export -f msg_ok
 
-        msg_run() {
-          local msg="$1"
-          echo -e "BP=>${blueDark}[${lightBlue}COMMAND${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
-          eval "$msg"
-        }
-        export -f msg_run
-
         msg_info() {
-          local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
+          local msg="$(sed 's/<[^>]*>//g' <<< "$1")"
           echo -e "BP=>${blueDark}[${cyan}INFO${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
         }
         export -f msg_info
 
-        msg_warning() {
-          local msg="$1"
-          msg="$(sed 's/<[^>]*>//g' <<< "$msg")" # Remove HTML tags
-          echo -e "BP=>${blueDark}[${yellow}WARNING${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+        msg_run() {
+          echo -e "BP=>${blueDark}[${lightBlue}COMMAND${blueDark}]${reset} ${cyan}→${reset} ${white}$1${reset}"
+          eval "$1"
         }
-        export -f msg_warning
+        export -f msg_run
 
         replicate() {
           local char=${1:-'#'}
@@ -195,16 +116,11 @@ runs:
 
         send_telegram_message() {
           local message="$1"
-          local parse_mode="${2:-HTML}"
-          
-          # Display message in terminal (without HTML tags)
           echo -e "${red}ERROR: $(sed 's/<[^>]*>//g' <<< "$message")${reset}"
-          
-          # Send to Telegram
-          curl -s -X POST "https://api.telegram.org/bot${{ inputs.telegram_token }}/sendMessage" \
-            -d chat_id="${{ inputs.telegram_chat_id }}" \
+          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_TOKEN}/sendMessage" \
+            -d chat_id="${CHAT_ID}" \
             -d text="${message}" \
-            -d parse_mode="${parse_mode}"
+            -d parse_mode="HTML"
         }
         export -f send_telegram_message
         EOF
@@ -303,8 +219,8 @@ runs:
           echo "BIGLINUX_BRANCH=${{ inputs.biglinux_branch }}"
           echo "KERNEL=${{ inputs.kernel }}"
           echo "RELEASE_TAG=${{ inputs.release_tag }}"
-          echo "SCOPE=${{ inputs.scope }}"
-          echo "OFFICE=${{ inputs.office-chooser }}"
+          echo "SCOPE=full"
+          echo "OFFICE=false"
         } >> "$GITHUB_ENV"
 
     - name: Build ISO
@@ -316,7 +232,7 @@ runs:
         
         # Execute the existing build-iso.sh script directly
         chmod +x ./build-iso.sh
-        ./build-iso.sh --automatic
+        ./build-iso.sh
         
         # Check exit code
         BUILD_EXIT_CODE=$?
@@ -339,7 +255,7 @@ runs:
 
     - name: Setup tmate session for debugging
       uses: mxschmitt/action-tmate@v3
-      if: ${{ github.event.client_payload.tmate == true || inputs.tmate == true}}
+      if: ${{ inputs.tmate == true }}
       with:
         install-dependencies: false
         detached: true

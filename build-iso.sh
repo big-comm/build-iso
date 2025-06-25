@@ -7,31 +7,57 @@
 #  to the standard ISO build flow.
 #
 
-# Script information
-APP="${0##*/}"
-VERSION="1.0.1"
-DESCRIPTION="ISO Builder Tool for BigCommunity/BigLinux"
-
 # Terminal configuration
 export TERM=${TERM:-xterm-256color}
-IS_AUTO=false
 
-# Display script version
-show_version() {
-  echo -e "${cyan}${APP} v${VERSION}${reset}"
-  echo -e "${DESCRIPTION}"
-  echo -e "Copyright (C) 2024, BigCommunity Team\n"
+# Color definitions (since we removed dependency on external terminal_utils.sh)
+blueDark="\e[1;38;5;33m"
+mediumBlue="\e[1;38;5;32m" 
+lightBlue="\e[1;38;5;39m"
+cyan="\e[1;38;5;45m"
+white="\e[1;97m"
+reset="\e[0m"
+red="\e[1;31m"
+yellow="\e[1;33m"
+green="\e[1;32m"
+
+# Terminal utility functions
+die() {
+  local msg="$1"
+  msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+  echo -e "BP=>${red}error: ${white}${msg}${reset}"
+  exit 1
 }
 
-# Display help information
-show_usage() {
-  echo -e "${reset}${APP} v${VERSION} - ${DESCRIPTION}${reset}"
-  echo -e "${red}Usage: ${reset}$APP ${cyan}[options]${reset}"
-  echo -e "\n${cyan}Options:${reset}"
-  echo -e "  -a, --auto, --automatic    ${cyan}# Build ISO automatically via GitHub Action${reset}"
-  echo -e "  -n, --nocolor              ${cyan}# Suppress color output${reset}"
-  echo -e "  -V, --version              ${cyan}# Display script version${reset}"
-  echo -e "  -h, --help                 ${cyan}# Display this help information${reset}\n"
+msg() {
+  local msg="$1"
+  msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+  echo -e "BP=>${blueDark}[${lightBlue}RUNNING${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+}
+
+msg_ok() {
+  local msg="$1"
+  msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+  echo -e "BP=>${blueDark}[${green}SUCCESS${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+}
+
+msg_info() {
+  local msg="$1"
+  msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+  echo -e "BP=>${blueDark}[${cyan}INFO${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+}
+
+msg_warning() {
+  local msg="$1"
+  msg="$(sed 's/<[^>]*>//g' <<< "$msg")"
+  echo -e "BP=>${blueDark}[${yellow}WARNING${blueDark}]${reset} ${cyan}→${reset} ${white}${msg}${reset}"
+}
+
+replicate() {
+  local char=${1:-'#'}
+  local nsize=${2:-$(tput cols)}
+  local line
+  printf -v line "%*s" "$nsize" && echo -e "${blueDark}${line// /$char}${reset}"
 }
 
 #===============================================================================
@@ -558,27 +584,12 @@ build_iso() {
   msg "Starting ISO build process"
   
   # Display build configuration
-  echo "########################## SUMMARY #################################"
-  echo "BUILD COMMAND            : buildiso ${SCOPE:+-f} -p $EDITION -b $MANJARO_BRANCH -k ${KERNEL_NAME} ${OFFICE:+-o}"
-  echo "PROFILE_PATH             : $PROFILE_PATH"
-  echo "PROFILE_PATH_EDITION     : $PROFILE_PATH_EDITION"
-  echo "DISTRONAME               : $DISTRONAME"
-  echo "EDITION                  : $EDITION"
-  echo "MANJARO_BRANCH           : $MANJARO_BRANCH"
-  echo "BIGCOMMUNITY_BRANCH      : $BIGCOMMUNITY_BRANCH"
-  echo "BIGLINUX_BRANCH          : $BIGLINUX_BRANCH"
-  echo "KERNEL_VERSION_DOT       : ${KERNEL_VERSION_DOT}"
-  echo "KERNEL_NAME              : ${KERNEL_NAME}"
-  echo "SCOPE                    : $SCOPE"
-  echo "OFFICE                   : $OFFICE"
-  replicate "#"
-  echo "WORK_PATH                : $WORK_PATH"
-  echo "WORK_PATH_ISO_PROFILES   : $WORK_PATH_ISO_PROFILES"
-  echo "PATH_MANJARO_ISO_PROFILES: $PATH_MANJARO_ISO_PROFILES"
-  echo "ISO_BASENAME             : $ISO_BASENAME"
-  replicate "#"
-  echo "DEBUG                    : $DEBUG"
-  echo "BUILDUSER_RUN_DIR        : $(cat "$HOME_FOLDER/.config/manjaro-tools/iso-profiles.conf" 2>/dev/null || echo "N/A")"
+  replicate "#" 
+  msg_info "BUILD COMMAND: buildiso -f -p $EDITION -b $MANJARO_BRANCH -k ${KERNEL_NAME}"
+  msg_info "DISTRONAME: $DISTRONAME"
+  msg_info "EDITION: $EDITION" 
+  msg_info "KERNEL: ${KERNEL_NAME}"
+  msg_info "ISO_BASENAME: $ISO_BASENAME"
   replicate "#"
   
   # Verify configuration
@@ -589,9 +600,9 @@ build_iso() {
   LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -q -v"
   
   if $DEBUG; then
-    LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -d zstd ${SCOPE:+-f} -p $EDITION -b $MANJARO_BRANCH -k linux${KERNEL_NAME} ${OFFICE:+-o};exit \$?"
+    LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -d zstd -f -p $EDITION -b $MANJARO_BRANCH -k linux${KERNEL_NAME};exit \$?"
   else
-    LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -d zstd ${SCOPE:+-f} -p $EDITION -b $MANJARO_BRANCH -k linux${KERNEL_NAME} ${OFFICE:+-o} > /dev/null 2>&1; exit \$?"
+    LC_ALL=C sudo -u "$USERNAME" bash -c "buildiso -d zstd -f -p $EDITION -b $MANJARO_BRANCH -k linux${KERNEL_NAME} > /dev/null 2>&1; exit \$?"
   fi
   BUILD_EXIT_CODE=$?
   
@@ -772,27 +783,5 @@ calc_elapsed_time() {
 # Script entry point
 #===============================================================================
 
-# Process command line arguments
-if test $# -lt 1; then
-  show_usage
-  exit $(($# ? 0 : 1))
-fi
-
-# Loop through all parameters
-for arg in "$@"; do
-  if [[ "$arg" = @(-n|--nocolor) ]]; then
-    nocolor=true
-  elif [[ "$arg" = @(-V|--version) ]]; then
-    show_version
-    exit $(($# ? 0 : 1))
-  elif [[ "$arg" = @(-h|--help) ]]; then
-    show_usage
-    exit $(($# ? 0 : 1))
-  elif [[ "$arg" = @(-a|--auto|--automatic) ]]; then
-    IS_AUTO=true
-    make_iso
-  else
-    show_usage
-    exit $(($# ? 0 : 1))
-  fi
-done
+# Run ISO build automatically
+make_iso
