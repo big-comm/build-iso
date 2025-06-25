@@ -26,7 +26,7 @@ This system eliminates the complexity of manual ISO building by providing an int
 - **Real-time validation** against live repository contents
 
 ### 🎯 **Multi-Distribution Support**
-- **BigCommunity Linux**: Community-driven Manjaro-based distribution
+- **BigCommunity Linux**: Community-driven BigLinux-based distribution
 - **BigLinux**: Performance-optimized Brazilian Linux distribution
 - **Extensible framework** for additional distributions
 
@@ -61,7 +61,7 @@ This system eliminates the complexity of manual ISO building by providing an int
   # https://github.com/big-comm/gitrepo
   
   # The package includes:
-  # - build-iso: Command-line tool for ISO generation
+  # - gitrepo-iso: Command-line tool for ISO generation
   # - Interactive menu system
   # - Organization management
   # - Automatic GitHub Actions triggering
@@ -96,12 +96,12 @@ This system eliminates the complexity of manual ISO building by providing an int
 
 2. **Run Interactive Mode**:
    ```bash
-   build-iso
+   gitrepo-iso
    ```
 
 3. **Automatic Mode**:
    ```bash
-   build-iso -o your-organization --auto
+   gitrepo-iso -o your-organization --auto
    ```
 
 ### Method 2: Manual GitHub Actions Trigger
@@ -234,7 +234,7 @@ Detailed build logs are available in the GitHub Actions interface, including:
 Enable interactive debugging by setting the tmate option:
 
 ```bash
-build-iso -o your-org --auto -t  # Enable tmate session
+gitrepo-iso -o your-org --auto -t  # Enable tmate session
 ```
 
 This provides SSH access to the build environment during execution.
